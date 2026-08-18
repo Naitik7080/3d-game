@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>3D Coin Collector V3 - Human Characters</title>
+<style>
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#000;font-family:Arial,sans-serif;touch-action:none}
+#hud{position:fixed;top:12px;left:12px;z-index:10;color:#fff;background:rgba(0,0,0,.62);padding:12px 16px;border-radius:14px;font-size:17px;line-height:1.55}
+#objective{position:fixed;top:12px;right:12px;z-index:10;color:#fff;background:rgba(0,0,0,.62);padding:10px 14px;border-radius:14px;text-align:right;font-size:14px}
+#controls{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;color:#fff;background:rgba(0,0,0,.55);padding:8px 13px;border-radius:10px;font-size:13px}
+#message{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(0,0,0,.35)}
+#box{background:rgba(10,10,15,.94);color:#fff;text-align:center;padding:30px 38px;border-radius:22px;min-width:280px}
+#box h1{margin:0 0 10px;font-size:34px}
+#touch{display:none;position:fixed;bottom:30px;left:25px;z-index:20;width:150px;height:150px}
+.btn{position:absolute;width:52px;height:52px;border:0;border-radius:15px;background:rgba(255,255,255,.25);color:#fff;font-size:24px}
+#up{left:49px;top:0}#down{left:49px;bottom:0}#left{left:0;top:49px}#right{right:0;top:49px}
+@media(max-width:700px){#controls{display:none}#touch{display:block}}
+</style>
+</head>
+<body>
+<div id="hud">🪙 Coins: <b id="score">0</b>/12<br>❤️ Health: <b id="health">100</b>%<br>⚡ <span id="boost">Normal</span></div>
+<div id="objective">🎯 Collect all coins<br>👹 Enemy is chasing you</div>
+<div id="controls">WASD / Arrow Keys = Move &nbsp; | &nbsp; R = Restart</div>
+<div id="touch"><button class="btn" id="up">▲</button><button class="btn" id="left">◀</button><button class="btn" id="right">▶</button><button class="btn" id="down">▼</button></div>
+<div id="message"><div id="box"><h1 id="result"></h1><p id="resultText"></p><p>Press <b>R</b> to restart</p></div></div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x82b8ee);
+scene.fog=new THREE.Fog(0x82b8ee,35,105);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,500);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xdceeff,0x426b3d,2.0));
+const sun=new THREE.DirectionalLight(0xffffff,3);
+sun.position.set(-25,35,15);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
+
+// Ground: 80m x 80m
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(90,90),new THREE.MeshStandardMaterial({color:0x559b51}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+
+// Roads
+const roadMat=new THREE.MeshStandardMaterial({color:0x35393e});
+for(const [w,d] of [[10,90],[90,10]]){
+ const r=new THREE.Mesh(new THREE.BoxGeometry(w,.06,d),roadMat);r.position.y=.03;scene.add(r);
+}
+const lineMat=new THREE.MeshBasicMaterial({color:0xf1dd69});
+for(let i=-40;i<=40;i+=6){
+ for(const z of [-1.5,1.5]){
+  const l=new THREE.Mesh(new THREE.BoxGeometry(.3,.04,2.6),lineMat);l.position.set(i,.08,z);scene.add(l);
+ }
+}
+
+// Real-world-ish house proportions: wall height ~3m, door ~2m, roof above walls.
+const solidBuildings=[];
+const wallMat=new THREE.MeshStandardMaterial({color:0xd8c6a7});
+const roofMat=new THREE.MeshStandardMaterial({color:0x7c3d2d});
+const trimMat=new THREE.MeshStandardMaterial({color:0xefe7d8});
+const windowMat=new THREE.MeshStandardMaterial({color:0x5da6c9,metalness:.15,roughness:.25});
+function house(x,z,w=10,d=8){
+ const g=new THREE.Group();g.position.set(x,0,z);
+ const wall=new THREE.Mesh(new THREE.BoxGeometry(w,3,d),wallMat);
+ wall.position.y=1.5;wall.castShadow=true;wall.receiveShadow=true;g.add(wall);
+
+ const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*.72,2.7,4),roofMat);
+ roof.rotation.y=Math.PI/4;roof.position.y=4.35;roof.scale.z=d/w;roof.castShadow=true;g.add(roof);
+
+ // Door on front (toward +z)
+ const door=new THREE.Mesh(new THREE.BoxGeometry(1.25,2.1,.12),new THREE.MeshStandardMaterial({color:0x5b3926}));
+ door.position.set(0,1.05,d/2+.07);g.add(door);
+ const knob=new THREE.Mesh(new THREE.SphereGeometry(.07,10,8),new THREE.MeshStandardMaterial({color:0xd6b34a,metalness:.7}));
+ knob.position.set(.38,1.05,d/2+.15);g.add(knob);
+
+ // windows
+ for(const wx of [-w*.28,w*.28]){
+  const win=new THREE.Mesh(new THREE.BoxGeometry(1.7,1.15,.1),windowMat);
+  win.position.set(wx,1.75,d/2+.08);g.add(win);
+  const v=new THREE.Mesh(new THREE.BoxGeometry(.06,1.2,.12),trimMat);v.position.set(wx,1.75,d/2+.15);g.add(v);
+  const h=new THREE.Mesh(new THREE.BoxGeometry(1.75,.06,.12),trimMat);h.position.set(wx,1.75,d/2+.15);g.add(h);
+ }
+ scene.add(g);
+ solidBuildings.push({group:g,box:new THREE.Box3().setFromObject(wall)});
+}
+house(-17,-16,11,9);
+house(17,15,12,9);
+house(-17,16,9,8);
+house(17,-16,10,8);
+
+// Trees
+function tree(x,z){
+ const g=new THREE.Group();g.position.set(x,0,z);
+ const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.3,.4,2.4,10),new THREE.MeshStandardMaterial({color:0x69401f}));
+ trunk.position.y=1.2;trunk.castShadow=true;g.add(trunk);
+ const crown=new THREE.Mesh(new THREE.SphereGeometry(1.45,18,14),new THREE.MeshStandardMaterial({color:0x28752d}));
+ crown.position.y=3.0;crown.castShadow=true;g.add(crown);scene.add(g);
+}
+[[-30,-30],[-30,30],[30,-30],[30,30],[-31,-10],[-31,12],[31,-12],[31,12],[-12,31],[12,-31]].forEach(p=>tree(...p));
+
+// Human character creator
+function limb(mat,radius,length){
+ const m=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius*1.08,length,12),mat);
+ m.castShadow=true;return m;
+}
+function makeHuman(bodyColor,pantsColor,skinColor,hairColor,shoeColor){
+ const g=new THREE.Group();
+ const skin=new THREE.MeshStandardMaterial({color:skinColor,roughness:.8});
+ const bodyMat=new THREE.MeshStandardMaterial({color:bodyColor,roughness:.75});
+ const pantsMat=new THREE.MeshStandardMaterial({color:pantsColor,roughness:.8});
+ const hairMat=new THREE.MeshStandardMaterial({color:hairColor,roughness:.9});
+ const shoeMat=new THREE.MeshStandardMaterial({color:shoeColor,roughness:.7});
+
+ // feet
+ const leftFoot=new THREE.Mesh(new THREE.BoxGeometry(.42,.22,.72),shoeMat);
+ const rightFoot=leftFoot.clone();
+ leftFoot.position.set(-.24,.12,.10);rightFoot.position.set(.24,.12,.10);
+ leftFoot.castShadow=rightFoot.castShadow=true;g.add(leftFoot,rightFoot);
+
+ // legs
+ const leftLeg=limb(pantsMat,.19,1.35),rightLeg=limb(pantsMat,.19,1.35);
+ leftLeg.position.set(-.24,.82,0);rightLeg.position.set(.24,.82,0);g.add(leftLeg,rightLeg);
+
+ // torso
+ const torso=new THREE.Mesh(new THREE.BoxGeometry(1.05,1.35,.55),bodyMat);
+ torso.position.y=1.85;torso.castShadow=true;g.add(torso);
+
+ // arms
+ const leftArm=limb(bodyMat,.15,1.35),rightArm=limb(bodyMat,.15,1.35);
+ leftArm.position.set(-.68,1.86,0);rightArm.position.set(.68,1.86,0);
+ leftArm.rotation.z=.04;rightArm.rotation.z=-.04;g.add(leftArm,rightArm);
+ const lh=new THREE.Mesh(new THREE.SphereGeometry(.17,14,10),skin);
+ const rh=lh.clone();lh.position.set(-.69,1.17,0);rh.position.set(.69,1.17,0);g.add(lh,rh);
+
+ // neck/head
+ const neck=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.25,12),skin);neck.position.y=2.58;g.add(neck);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.43,24,18),skin);head.position.y=3.02;head.castShadow=true;g.add(head);
+
+ // hair cap
+ const hair=new THREE.Mesh(new THREE.SphereGeometry(.445,24,12,0,Math.PI*2,0,Math.PI*.52),hairMat);
+ hair.position.y=3.08;hair.castShadow=true;g.add(hair);
+
+ // eyes, facing +z
+ const eyeMat=new THREE.MeshStandardMaterial({color:0x111111});
+ for(const x of [-.15,.15]){
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(.045,10,8),eyeMat);
+  eye.position.set(x,3.08,.405);g.add(eye);
+ }
+ // mouth
+ const mouth=new THREE.Mesh(new THREE.BoxGeometry(.18,.035,.025),new THREE.MeshStandardMaterial({color:0x7b2424}));
+ mouth.position.set(0,2.88,.405);g.add(mouth);
+
+ // shoulders
+ const shoulder=new THREE.Mesh(new THREE.BoxGeometry(1.3,.22,.62),bodyMat);
+ shoulder.position.y=2.42;shoulder.castShadow=true;g.add(shoulder);
+
+ g.userData={leftArm,rightArm,leftLeg,rightLeg};
+ return g;
+}
+
+// Player and enemy humans
+const player=makeHuman(0x2867d8,0x263b67,0xffc79d,0x352218,0x20252c);
+player.position.set(0,0,32);scene.add(player);
+
+const enemy=makeHuman(0x8f2028,0x242424,0xd69b78,0x171717,0x111111);
+enemy.scale.setScalar(1.06);enemy.position.set(0,0,-31);scene.add(enemy);
+
+// Coins
+const coinPositions=[[-6,26],[8,26],[-25,21],[25,21],[-10,10],[11,10],[-25,0],[25,0],[-10,-7],[10,-7],[-24,-24],[24,-24]];
+const coins=[];
+for(const [x,z] of coinPositions){
+ const c=new THREE.Mesh(new THREE.CylinderGeometry(.6,.6,.18,32),new THREE.MeshStandardMaterial({color:0xffd21a,metalness:.8,roughness:.18}));
+ c.rotation.x=Math.PI/2;c.position.set(x,.9,z);c.castShadow=true;scene.add(c);coins.push(c);
+}
+
+// Power-up
+const power=new THREE.Mesh(new THREE.OctahedronGeometry(.7),new THREE.MeshStandardMaterial({color:0x32e8ff,emissive:0x087b99,emissiveIntensity:1}));
+power.position.set(0,.9,0);power.castShadow=true;scene.add(power);
+let boost=0;
+
+const keys={};
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==="r")location.reload()});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+const touchMap={up:"w",down:"s",left:"a",right:"d"};
+for(const id in touchMap){
+ const b=document.getElementById(id),k=touchMap[id];
+ b.addEventListener("pointerdown",e=>{e.preventDefault();keys[k]=true});
+ ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,()=>keys[k]=false));
+}
+
+let score=0,health=100,gameOver=false,lastHit=0;
+function ui(){
+ document.getElementById("score").textContent=score;
+ document.getElementById("health").textContent=Math.max(0,Math.ceil(health));
+ document.getElementById("boost").textContent=boost>0?"SPEED BOOST":"Normal";
+}
+function end(win){
+ gameOver=true;document.getElementById("message").style.display="flex";
+ document.getElementById("result").textContent=win?"🏆 YOU WIN!":"💀 GAME OVER";
+ document.getElementById("resultText").textContent=win?"You collected all 12 coins!":"The enemy caught you.";
+}
+const clock=new THREE.Clock();
+const pbox=new THREE.Box3();
+
+function animateHuman(g,t,run){
+ const d=g.userData;
+ if(!run){d.leftArm.rotation.x=0;d.rightArm.rotation.x=0;d.leftLeg.rotation.x=0;d.rightLeg.rotation.x=0;return}
+ const swing=Math.sin(t*10)*.55;
+ d.leftArm.rotation.x=swing;d.rightArm.rotation.x=-swing;
+ d.leftLeg.rotation.x=-swing;d.rightLeg.rotation.x=swing;
+}
+
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.05),t=performance.now()/1000;
+ if(!gameOver){
+  power.rotation.y+=.04;power.rotation.x+=.02;
+  let dx=0,dz=0;
+  if(keys.w||keys.arrowup)dz-=1;if(keys.s||keys.arrowdown)dz+=1;
+  if(keys.a||keys.arrowleft)dx-=1;if(keys.d||keys.arrowright)dx+=1;
+  const moving=dx||dz;
+  if(moving){
+   const len=Math.hypot(dx,dz);dx/=len;dz/=len;
+   const sp=boost>0?.26:.16;
+   const ox=player.position.x,oz=player.position.z;
+   player.position.x+=dx*sp;player.position.z+=dz*sp;
+   player.rotation.y=Math.atan2(dx,dz);
+   animateHuman(player,t,true);
+   pbox.setFromObject(player);
+   let blocked=false;
+   for(const b of solidBuildings){
+    if(pbox.intersectsBox(b.box)){blocked=true;break}
+   }
+   if(blocked){player.position.x=ox;player.position.z=oz}
+  }else animateHuman(player,t,false);
+
+  if(boost>0){boost-=dt;if(boost<0)boost=0;ui()}
+
+  // Enemy AI
+  const ex=player.position.x-enemy.position.x,ez=player.position.z-enemy.position.z;
+  const dist=Math.hypot(ex,ez);
+  if(dist>1.55){
+   const es=.078;
+   enemy.position.x+=(ex/dist)*es;enemy.position.z+=(ez/dist)*es;
+   enemy.rotation.y=Math.atan2(ex,ez);animateHuman(enemy,t,true);
+  }else{
+   animateHuman(enemy,t,false);
+   const now=performance.now();
+   if(now-lastHit>750){
+    lastHit=now;health-=20;
+    player.position.x+=(player.position.x-enemy.position.x)/Math.max(dist,.1)*2;
+    player.position.z+=(player.position.z-enemy.position.z)/Math.max(dist,.1)*2;
+    ui();if(health<=0)end(false);
+   }
+  }
+
+  for(let i=coins.length-1;i>=0;i--){
+   const c=coins[i];c.rotation.z+=.07;c.position.y=.9+Math.sin(performance.now()*.004+i)*.12;
+   if(player.position.distanceTo(c.position)<1.45){
+    scene.remove(c);coins.splice(i,1);score++;ui();if(score===12)end(true);
+   }
+  }
+
+  if(player.position.distanceTo(power.position)<1.7){
+   boost=8;power.position.set(999,999,999);ui();
+  }
+
+  player.position.x=THREE.MathUtils.clamp(player.position.x,-41,41);
+  player.position.z=THREE.MathUtils.clamp(player.position.z,-41,41);
+
+  // Third-person camera
+  const target=new THREE.Vector3(player.position.x,8.5,player.position.z+11);
+  camera.position.lerp(target,.085);
+  camera.lookAt(player.position.x,1.7,player.position.z);
+ }
+ renderer.render(scene,camera);
+}
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+ui();camera.position.set(0,8.5,43);camera.lookAt(0,1.7,32);animate();
+</script>
+</body>
+</html>
