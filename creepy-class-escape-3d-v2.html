@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creepy Class Escape 3D</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  body {
+    background: radial-gradient(circle at center, #241b3a, #0a0714);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:100vh; font-family:'Trebuchet MS','Segoe UI',Arial,sans-serif; overflow:hidden;
+  }
+  h1 { color:#ffcc80; text-shadow:2px 2px 0 #b71c1c, 0 0 12px rgba(255,100,50,0.6); margin:6px 0; font-size:20px; letter-spacing:1px; }
+  #gameWrap { position:relative; width:96vw; max-width:960px; }
+  #three-container { width:100%; aspect-ratio:16/9; max-height:78vh; border:5px solid #b71c1c; border-radius:10px; overflow:hidden; box-shadow:0 0 30px rgba(183,28,28,0.5); background:#050308; position:relative; }
+  canvas { display:block; width:100% !important; height:100% !important; }
+  #hud { position:absolute; top:8px; left:8px; right:8px; display:flex; justify-content:space-between; color:#fff; font-size:12px; text-shadow:1px 1px 2px #000; pointer-events:none; z-index:5; }
+  #hud span { background:rgba(0,0,0,0.55); padding:4px 8px; border-radius:8px; margin-right:4px; border:1px solid rgba(255,255,255,0.1); }
+  #roomLabel { position:absolute; top:8px; left:50%; transform:translateX(-50%); color:#ffcc80; background:rgba(0,0,0,0.55); padding:4px 12px; border-radius:8px; font-size:11px; z-index:5; border:1px solid rgba(255,255,255,0.1); }
+  #camBtn { position:absolute; top:38px; left:50%; transform:translateX(-50%); background:rgba(255,111,60,0.55); color:#fff; border:1px solid rgba(255,255,255,0.3); padding:4px 12px; border-radius:8px; font-size:11px; z-index:6; }
+  #msg { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:20px; font-weight:bold; text-align:center; background:rgba(10,5,20,0.94); padding:18px 24px; border-radius:14px; display:none; z-index:20; border:2px solid #b71c1c; width:80%; }
+  #msg button { display:block; margin:14px auto 0; padding:9px 22px; font-size:15px; background:#ff6f3c; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:bold; }
+  #controls { color:#bbb; margin-top:6px; font-size:11px; text-align:center; }
+  #touchUI { position:absolute; bottom:8px; left:0; right:0; display:flex; justify-content:space-between; padding:0 10px; z-index:10; pointer-events:none; }
+  .padGrid { display:grid; grid-template-columns:38px 38px 38px; grid-template-rows:38px 38px 38px; gap:3px; pointer-events:auto; }
+  .padBtn { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25); border-radius:8px; color:#fff; font-size:16px; display:flex; align-items:center; justify-content:center; }
+  .padBtn:active { background:rgba(255,111,60,0.5); }
+  .actionCol { display:flex; flex-direction:column; gap:6px; pointer-events:auto; }
+  .actBtn { width:58px; height:38px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:bold; background:rgba(255,111,60,0.35); }
+  .actBtn:active { background:rgba(255,111,60,0.7); }
+  @media (min-width:900px){ #touchUI{ display:none; } }
+</style>
+</head>
+<body>
+<h1>👻 Creepy Class Escape 3D</h1>
+<div id="gameWrap">
+  <div id="three-container">
+    <div id="hud">
+      <div><span id="scoreBox">Score: 0</span><span id="pranksBox">Pranks: 0/12</span></div>
+      <div><span id="hideBox">🫥 Hidden: No</span></div>
+    </div>
+    <div id="roomLabel">Classroom</div>
+    <button id="camBtn">🎥 Camera: Follow</button>
+    <div id="touchUI">
+      <div class="padGrid">
+        <div></div><button class="padBtn" id="btnUp">▲</button><div></div>
+        <button class="padBtn" id="btnLeft">◀</button><div></div><button class="padBtn" id="btnRight">▶</button>
+        <div></div><button class="padBtn" id="btnDown">▼</button><div></div>
+      </div>
+      <div class="actionCol">
+        <button class="actBtn" id="btnPrank">PRANK</button>
+        <button class="actBtn" id="btnHide">HIDE</button>
+      </div>
+    </div>
+    <div id="msg"><div id="msgText"></div><button onclick="restartGame()">Phir Se Khelo</button></div>
+  </div>
+</div>
+<div id="controls">WASD/Arrows = Move &nbsp;|&nbsp; SPACE = Prank &nbsp;|&nbsp; SHIFT = Chupo &nbsp;|&nbsp; Camera button = Angle badlo</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const container = document.getElementById('three-container');
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x1a1025, 22, 75);
+
+const camera = new THREE.PerspectiveCamera(58, 16/9, 0.1, 300);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.shadowMap.enabled = true;
+renderer.domElement.style.position='absolute'; renderer.domElement.style.top='0'; renderer.domElement.style.left='0';
+container.insertBefore(renderer.domElement, container.firstChild);
+
+function resizeRenderer(){
+  const w = container.clientWidth, h = container.clientHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeRenderer);
+setTimeout(resizeRenderer, 50);
+
+// ---------- LIGHTS ----------
+scene.add(new THREE.AmbientLight(0x554466, 0.55));
+const moon = new THREE.DirectionalLight(0xaabbff, 0.7);
+moon.position.set(30,45,15);
+moon.castShadow = true;
+moon.shadow.mapSize.set(1024,1024);
+moon.shadow.camera.left=-40; moon.shadow.camera.right=40;
+moon.shadow.camera.top=40; moon.shadow.camera.bottom=-40;
+scene.add(moon);
+
+// ---------- TEXTURES (procedural) ----------
+function makeCheckerTexture(c1,c2,size=64){
+  const cnv = document.createElement('canvas'); cnv.width=size; cnv.height=size;
+  const g = cnv.getContext('2d');
+  g.fillStyle=c1; g.fillRect(0,0,size,size);
+  g.fillStyle=c2; g.fillRect(0,0,size/2,size/2); g.fillRect(size/2,size/2,size/2,size/2);
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+function makeWallTexture(base){
+  const cnv = document.createElement('canvas'); cnv.width=64; cnv.height=64;
+  const g = cnv.getContext('2d');
+  g.fillStyle=base; g.fillRect(0,0,64,64);
+  g.fillStyle='rgba(0,0,0,0.12)';
+  for(let i=0;i<64;i+=8){ g.fillRect(0,i,64,1); }
+  g.strokeStyle='rgba(255,255,255,0.05)'; g.strokeRect(0,0,64,64);
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+// ---------- ROOM GRID CONFIG ----------
+const roomW=20, roomD=14, wallH=6;
+const grid = [ ["Classroom","Library","Staffroom"], ["Kitchen","Storage","Music Room"] ];
+const roomColors = { "Classroom":0x33305c, "Library":0x2f3a55, "Staffroom":0x3a2a4a, "Kitchen":0x2a4238, "Storage":0x402a2a, "Music Room":0x2a3a4a };
+const furnLabels = {
+  "Classroom":["Desk","Cupboard"], "Library":["Bookshelf","Reading Table"], "Staffroom":["Sofa","Coffee Table"],
+  "Kitchen":["Counter","Fridge"], "Storage":["Shelf","Boxes"], "Music Room":["Piano","Drum Set"]
+};
+const prankNames = ["Whoopee Cushion","Chalk Swap","Sticky Notes","Fake Spider","Glue Trap","Banana Peel","Salt in Sugar","Water Balloon","Confetti Bomb","Rubber Snake","Squeaky Chair","Ink Pen Trick"];
+let prankNameIdx = 0;
+
+const rooms = [];
+for(let r=0;r<2;r++){
+  for(let c=0;c<3;c++){
+    const name = grid[r][c];
+    const x0 = 1 + c*(roomW+1), x1 = x0+roomW;
+    const z0 = 1 + r*(roomD+1), z1 = z0+roomD;
+    const cx=(x0+x1)/2, cz=(z0+z1)/2;
+    const labels = furnLabels[name];
+    const room = {
+      name, x0,x1,z0,z1, color: roomColors[name],
+      furniture:[
+        {x:x0+3, z:z0+3, w:3,d:2,h:1.4, label:labels[0]},
+        {x:x1-4, z:z1-3, w:3,d:2.4,h:1.8, label:labels[1]},
+        {x:cx-2, z:z0+0.7, w:4,d:0.3,h:2.6, label:"Curtain"}
+      ],
+      pranks:[
+        {x:x0+roomW*0.3, z:z0+roomD*0.65, label:prankNames[prankNameIdx++]},
+        {x:x0+roomW*0.7, z:z0+roomD*0.3, label:prankNames[prankNameIdx++]}
+      ],
+      cx, cz
+    };
+    rooms.push(room);
+  }
+}
+function getRoomAt(x,z){
+  for(const r of rooms) if(x>=r.x0 && x<=r.x1 && z>=r.z0 && z<=r.z1) return r;
+  return null;
+}
+function getRoom(name){ return rooms.find(r=>r.name===name); }
+
+// ---------- FLOOR ----------
+const totalW = 1 + 3*(roomW+1), totalD = 1 + 2*(roomD+1);
+const floorTex = makeCheckerTexture('#201830','#241c36',64);
+floorTex.repeat.set(totalW/4, totalD/4);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(totalW,totalD), new THREE.MeshStandardMaterial({map:floorTex, roughness:0.9}));
+floor.rotation.x=-Math.PI/2; floor.position.set(totalW/2,0,totalD/2); floor.receiveShadow=true;
+scene.add(floor);
+
+const ceilings = [];
+rooms.forEach(r=>{
+  const w=r.x1-r.x0, d=r.z1-r.z0;
+  const rugTex = makeCheckerTexture('#'+r.color.toString(16).padStart(6,'0'), '#201830', 64);
+  rugTex.repeat.set(w/3,d/3);
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(w,d), new THREE.MeshStandardMaterial({map:rugTex, roughness:0.85}));
+  rug.rotation.x=-Math.PI/2; rug.position.set(r.cx,0.02,r.cz); rug.receiveShadow=true;
+  scene.add(rug);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w,d), new THREE.MeshStandardMaterial({color:0x14101f, side:THREE.DoubleSide, transparent:true, opacity:0.92}));
+  ceil.rotation.x=Math.PI/2; ceil.position.set(r.cx, wallH-0.05, r.cz);
+  scene.add(ceil);
+  ceilings.push({room:r, mesh:ceil});
+});
+
+// ---------- WALLS + DOOR GATES ----------
+const wallTex = makeWallTexture('#4a3b5c');
+const wallMat = new THREE.MeshStandardMaterial({map:wallTex, roughness:0.8});
+const gateMat = new THREE.MeshStandardMaterial({color:0xb8860b, roughness:0.5, metalness:0.3});
+const wallSegs = [];
+function addWallBox(cx,cz,w,d,h){
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
+  mesh.position.set(cx,h/2,cz); mesh.castShadow=true; mesh.receiveShadow=true;
+  scene.add(mesh);
+  wallSegs.push({x:cx,z:cz,w,d});
+}
+function addGate(orientation, fixedCoord, gapCenter, gapWidth){
+  const postH = wallH, postW=0.35;
+  if(orientation==='vert'){ // wall runs along z at x=fixedCoord, gap along z
+    const g1 = new THREE.Mesh(new THREE.BoxGeometry(postW, postH, postW), gateMat);
+    g1.position.set(fixedCoord, postH/2, gapCenter-gapWidth/2); g1.castShadow=true; scene.add(g1);
+    const g2 = g1.clone(); g2.position.z = gapCenter+gapWidth/2; scene.add(g2);
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(postW*1.5, 0.4, gapWidth+postW), gateMat);
+    lintel.position.set(fixedCoord, postH-0.2, gapCenter); scene.add(lintel);
+  } else { // horiz wall runs along x at z=fixedCoord, gap along x
+    const g1 = new THREE.Mesh(new THREE.BoxGeometry(postW, postH, postW), gateMat);
+    g1.position.set(gapCenter-gapWidth/2, postH/2, fixedCoord); g1.castShadow=true; scene.add(g1);
+    const g2 = g1.clone(); g2.position.x = gapCenter+gapWidth/2; scene.add(g2);
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(gapWidth+postW, 0.4, postW*1.5), gateMat);
+    lintel.position.set(gapCenter, postH-0.2, fixedCoord); scene.add(lintel);
+  }
+}
+function addWallWithGap(orientation, fixedCoord, start, end, gapCenter, gapWidth){
+  const gapStart = gapCenter-gapWidth/2, gapEnd = gapCenter+gapWidth/2;
+  if(gapStart>start){
+    const mid=(start+gapStart)/2, len=gapStart-start;
+    if(orientation==='vert') addWallBox(fixedCoord, mid, 1, len, wallH); else addWallBox(mid, fixedCoord, len, 1, wallH);
+  }
+  if(gapEnd<end){
+    const mid=(gapEnd+end)/2, len=end-gapEnd;
+    if(orientation==='vert') addWallBox(fixedCoord, mid, 1, len, wallH); else addWallBox(mid, fixedCoord, len, 1, wallH);
+  }
+  addGate(orientation, fixedCoord, gapCenter, gapWidth);
+}
+
+// outer walls
+addWallBox(totalW/2, 0.5, totalW, 1, wallH);
+addWallBox(totalW/2, totalD-0.5, totalW, 1, wallH);
+addWallBox(0.5, totalD/2, 1, totalD, wallH);
+addWallBox(totalW-0.5, totalD/2, 1, totalD, wallH);
+
+// internal vertical walls (between columns), each row
+const doorPts = {};
+for(let r=0;r<2;r++){
+  for(let c=0;c<2;c++){
+    const xw = 1 + (c+1)*(roomW+1) - 0.5;
+    const rowZ0 = 1+r*(roomD+1), rowZ1 = rowZ0+roomD;
+    const gapZ = rowZ0 + roomD/2;
+    addWallWithGap('vert', xw, rowZ0, rowZ1, gapZ, 4);
+    doorPts[grid[r][c]+'|'+grid[r][c+1]] = {x:xw, z:gapZ};
+  }
+}
+// internal horizontal wall (between rows), each column
+for(let c=0;c<3;c++){
+  const zw = 1 + (roomD+1) - 0.5;
+  const colX0 = 1+c*(roomW+1), colX1 = colX0+roomW;
+  const gapX = colX0 + roomW/2;
+  addWallWithGap('horiz', zw, colX0, colX1, gapX, 4);
+  doorPts[grid[0][c]+'|'+grid[1][c]] = {x:gapX, z:zw};
+}
+
+// ---------- FURNITURE ----------
+const furnMat = new THREE.MeshStandardMaterial({color:0x6b4c2f, roughness:0.8});
+const curtainMat = new THREE.MeshStandardMaterial({color:0x7a2f3a, roughness:0.9});
+const allFurniture = [];
+rooms.forEach(r=>r.furniture.forEach((f,i)=>{
+  const mat = f.label==="Curtain" ? curtainMat : furnMat;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(f.w,f.h,f.d), mat);
+  mesh.position.set(f.x,f.h/2,f.z); mesh.castShadow=true; mesh.receiveShadow=true;
+  scene.add(mesh);
+  allFurniture.push(f);
+}));
+
+// ---------- PRANKS ----------
+const prankMat = new THREE.MeshStandardMaterial({color:0x00c853, emissive:0x00c853, emissiveIntensity:0.5});
+const allPranks = [];
+rooms.forEach(r=>r.pranks.forEach(p=>{
+  const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4,0), prankMat.clone());
+  mesh.position.set(p.x,1.1,p.z); mesh.castShadow=true;
+  scene.add(mesh);
+  allPranks.push({...p, mesh, done:false});
+}));
+
+// ---------- CHARACTERS ----------
+function makeStudent(){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.5,1.2,10), new THREE.MeshStandardMaterial({color:0x2e7dd6}));
+  body.position.y=0.95; body.castShadow=true; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,12,12), new THREE.MeshStandardMaterial({color:0xffcf9e}));
+  head.position.y=1.85; head.castShadow=true; g.add(head);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.42,12,8,0,Math.PI*2,0,Math.PI/2), new THREE.MeshStandardMaterial({color:0x3b2a1a}));
+  hair.position.y=2.0; g.add(hair);
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.6,6), new THREE.MeshStandardMaterial({color:0x274472}));
+  legL.position.set(-0.18,0.3,0); legL.castShadow=true; g.add(legL);
+  const legR = legL.clone(); legR.position.x=0.18; g.add(legR);
+  const armMat = new THREE.MeshStandardMaterial({color:0x2e7dd6});
+  const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.75,6), armMat);
+  armL.position.set(-0.55,1.05,0); armL.castShadow=true; g.add(armL);
+  const armR = armL.clone(); armR.position.x=0.55; g.add(armR);
+  g.userData = {legL,legR,armL,armR,head};
+  return g;
+}
+function makeTeacher(){
+  const g = new THREE.Group();
+  const robe = new THREE.Mesh(new THREE.ConeGeometry(1.05,2.3,10), new THREE.MeshStandardMaterial({color:0x3d2a52, roughness:0.7}));
+  robe.position.y=1.35; robe.castShadow=true; g.add(robe);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.38,12,12), new THREE.MeshStandardMaterial({color:0xd8cfe0}));
+  head.position.y=2.75; head.castShadow=true; g.add(head);
+  const bun = new THREE.Mesh(new THREE.SphereGeometry(0.22,8,8), new THREE.MeshStandardMaterial({color:0x1a1420}));
+  bun.position.y=3.05; g.add(bun);
+  const eyeMat = new THREE.MeshStandardMaterial({color:0x5a3a3a, emissive:0x5a3a3a, emissiveIntensity:0.3});
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06,8,8), eyeMat);
+  eyeL.position.set(-0.13,2.78,0.32); g.add(eyeL);
+  const eyeR = eyeL.clone(); eyeR.position.x=0.13; g.add(eyeR);
+  const glow = new THREE.PointLight(0xff1744, 0, 5);
+  glow.position.set(0,2.75,0.4); g.add(glow);
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.5,6), new THREE.MeshStandardMaterial({color:0x1a1420}));
+  legL.position.set(-0.2,0.25,0); g.add(legL);
+  const legR = legL.clone(); legR.position.x=0.2; g.add(legR);
+  const armMat = new THREE.MeshStandardMaterial({color:0x3d2a52});
+  const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.85,6), armMat);
+  armL.position.set(-0.55,1.2,0); armL.castShadow=true; g.add(armL);
+  const armR = armL.clone(); armR.position.x=0.55; g.add(armR);
+  g.userData = {eyeL,eyeR,glow,robe,legL,legR,armL,armR};
+  return g;
+}
+const playerMesh = makeStudent();
+scene.add(playerMesh);
+const teacherMesh = makeTeacher();
+scene.add(teacherMesh);
+
+// ---------- PATROL PATH ----------
+const patrolPath = [
+  getRoom("Classroom"), doorPts["Classroom|Library"], getRoom("Library"), doorPts["Library|Staffroom"], getRoom("Staffroom"),
+  doorPts["Staffroom|Music Room"], getRoom("Music Room"), doorPts["Storage|Music Room"], getRoom("Storage"),
+  doorPts["Kitchen|Storage"], getRoom("Kitchen"), doorPts["Classroom|Kitchen"]
+].map(p => p.cx!==undefined ? {x:p.cx,z:p.cz} : {x:p.x,z:p.z});
+
+// ---------- COLLISION ----------
+function collidesWithWalls(x,z,radius=0.55){
+  for(const w of wallSegs){
+    if(x+radius > w.x-w.w/2 && x-radius < w.x+w.w/2 && z+radius > w.z-w.d/2 && z-radius < w.z+w.d/2) return true;
+  }
+  return x<1.2||x>totalW-1.2||z<1.2||z>totalD-1.2;
+}
+
+// ---------- STATE ----------
+const startRoom = getRoom("Classroom");
+const teacherStartRoom = getRoom("Storage");
+let state;
+function resetState(){
+  state = {
+    player:{x:startRoom.cx-4, z:startRoom.cz-2, facing:0, speed:0.11, walking:false},
+    teacher:{x:teacherStartRoom.cx, z:teacherStartRoom.cz, facing:0, speed:0.05, pathIdx:9, chasing:false},
+    hidden:false, hidingSpot:null,
+    score:0, prankCount:0, totalPranks: allPranks.length,
+    gameOver:false, keys:{}, cameraMode:0
+  };
+  allPranks.forEach(p=>{ p.done=false; p.mesh.visible=true; });
+  playerMesh.position.set(state.player.x,0,state.player.z); playerMesh.visible=true;
+  teacherMesh.position.set(state.teacher.x,0,state.teacher.z);
+  document.getElementById('msg').style.display='none';
+  updateHUD();
+}
+resetState();
+
+// ---------- INPUT ----------
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  state.keys[k]=true;
+  if(k===' ') tryPrank();
+  if(e.key==='Shift') tryHide();
+});
+window.addEventListener('keyup', e=>{ state.keys[e.key.toLowerCase()]=false; });
+function bindTouch(id, key){
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', ev=>{ ev.preventDefault(); state.keys[key]=true; }, {passive:false});
+  el.addEventListener('touchend', ev=>{ ev.preventDefault(); state.keys[key]=false; }, {passive:false});
+  el.addEventListener('mousedown', ()=> state.keys[key]=true);
+  el.addEventListener('mouseup', ()=> state.keys[key]=false);
+}
+bindTouch('btnUp','arrowup'); bindTouch('btnDown','arrowdown');
+bindTouch('btnLeft','arrowleft'); bindTouch('btnRight','arrowright');
+document.getElementById('btnPrank').addEventListener('touchstart', e=>{e.preventDefault(); tryPrank();});
+document.getElementById('btnPrank').addEventListener('click', tryPrank);
+document.getElementById('btnHide').addEventListener('touchstart', e=>{e.preventDefault(); tryHide();});
+document.getElementById('btnHide').addEventListener('click', tryHide);
+
+const camNames = ['Follow','Top-Down','Cinematic'];
+document.getElementById('camBtn').addEventListener('click', ()=>{
+  state.cameraMode = (state.cameraMode+1)%3;
+  document.getElementById('camBtn').textContent = '🎥 Camera: '+camNames[state.cameraMode];
+});
+
+function tryPrank(){
+  if(state.gameOver) return;
+  for(const p of allPranks){
+    if(p.done) continue;
+    const dx=state.player.x-p.x, dz=state.player.z-p.z;
+    if(Math.sqrt(dx*dx+dz*dz)<2.0){
+      p.done=true; p.mesh.visible=false;
+      state.score+=50; state.prankCount++;
+      updateHUD();
+      if(state.prankCount>=state.totalPranks) winGame();
+      return;
+    }
+  }
+}
+function tryHide(){
+  if(state.gameOver) return;
+  if(state.hidden){ state.hidden=false; state.hidingSpot=null; playerMesh.visible=true; updateHUD(); return; }
+  for(const f of allFurniture){
+    const dx=state.player.x-f.x, dz=state.player.z-f.z;
+    if(Math.sqrt(dx*dx+dz*dz)<2.3){
+      state.hidden=true; state.hidingSpot=f; playerMesh.visible=false; updateHUD(); return;
+    }
+  }
+}
+
+function lerpAngle(a,b,t){
+  let diff = ((b-a+Math.PI)%(Math.PI*2))-Math.PI;
+  if(diff<-Math.PI) diff+=Math.PI*2;
+  return a + diff*t;
+}
+
+// ---------- UPDATE ----------
+function updatePlayer(){
+  if(state.gameOver || state.hidden) { state.player.walking=false; return; }
+  const p = state.player;
+  let dx=0,dz=0;
+  if(state.keys['arrowup']||state.keys['w']) dz=-1;
+  if(state.keys['arrowdown']||state.keys['s']) dz=1;
+  if(state.keys['arrowleft']||state.keys['a']) dx=-1;
+  if(state.keys['arrowright']||state.keys['d']) dx=1;
+  if(dx!==0&&dz!==0){ dx*=0.707; dz*=0.707; }
+  state.player.walking = (dx!==0||dz!==0);
+  if(dx!==0||dz!==0) p.facing = Math.atan2(dx,dz);
+  const nx = p.x+dx*p.speed*3, nz = p.z+dz*p.speed*3;
+  if(!collidesWithWalls(nx,p.z)) p.x=nx;
+  if(!collidesWithWalls(p.x,nz)) p.z=nz;
+
+  playerMesh.position.x = p.x; playerMesh.position.z = p.z;
+  playerMesh.rotation.y = lerpAngle(playerMesh.rotation.y, p.facing, 0.2);
+  const walkT = performance.now()*0.012;
+  const ud = playerMesh.userData;
+  if(p.walking){
+    ud.legL.rotation.x = Math.sin(walkT)*0.6; ud.legR.rotation.x = -Math.sin(walkT)*0.6;
+    ud.armL.rotation.x = -Math.sin(walkT)*0.5; ud.armR.rotation.x = Math.sin(walkT)*0.5;
+    playerMesh.position.y = Math.abs(Math.sin(walkT))*0.06;
+  } else {
+    ud.legL.rotation.x=0; ud.legR.rotation.x=0; ud.armL.rotation.x=0; ud.armR.rotation.x=0;
+    playerMesh.position.y = 0;
+  }
+}
+
+function updateTeacher(){
+  if(state.gameOver) return;
+  const t = state.teacher, p = state.player;
+  const dx=p.x-t.x, dz=p.z-t.z, dist=Math.sqrt(dx*dx+dz*dz);
+  const roomP = getRoomAt(p.x,p.z), roomT = getRoomAt(t.x,t.z);
+  const sameArea = !roomP || !roomT || roomP===roomT;
+  const canSee = !state.hidden && sameArea && dist<11;
+  if(canSee) t.chasing=true; else if(t.chasing && dist>15) t.chasing=false;
+
+  let mx=0, mz=0;
+  if(t.chasing){
+    const len=Math.max(dist,0.01);
+    mx=(dx/len); mz=(dz/len);
+    const nx=t.x+mx*t.speed*3.1, nz=t.z+mz*t.speed*3.1;
+    if(!collidesWithWalls(nx,t.z,0.5)) t.x=nx;
+    if(!collidesWithWalls(t.x,nz,0.5)) t.z=nz;
+    if(dist<1.3 && !state.hidden) caughtGame();
+  } else {
+    const target = patrolPath[t.pathIdx];
+    const tx=target.x-t.x, tz=target.z-t.z, d=Math.sqrt(tx*tx+tz*tz);
+    if(d<0.6){ t.pathIdx=(t.pathIdx+1)%patrolPath.length; }
+    else {
+      mx=tx/d; mz=tz/d;
+      const nx=t.x+mx*t.speed*3, nz=t.z+mz*t.speed*3;
+      if(!collidesWithWalls(nx,t.z,0.5)) t.x=nx;
+      if(!collidesWithWalls(t.x,nz,0.5)) t.z=nz;
+    }
+  }
+  if(mx!==0||mz!==0){ t.facing = Math.atan2(mx,mz); }
+  teacherMesh.position.x=t.x; teacherMesh.position.z=t.z;
+  teacherMesh.rotation.y = lerpAngle(teacherMesh.rotation.y, t.facing, 0.15);
+  const walkT = performance.now()*0.01;
+  const ud = teacherMesh.userData;
+  ud.legL.rotation.x = Math.sin(walkT)*(t.chasing?0.9:0.5);
+  ud.legR.rotation.x = -Math.sin(walkT)*(t.chasing?0.9:0.5);
+  ud.armL.rotation.x = -Math.sin(walkT)*(t.chasing?0.7:0.4);
+  ud.armR.rotation.x = Math.sin(walkT)*(t.chasing?0.7:0.4);
+  ud.robe.rotation.z = Math.sin(walkT*0.5)*0.03;
+
+  const glowTarget = t.chasing ? 2.2 : 0;
+  ud.glow.intensity += (glowTarget - ud.glow.intensity)*0.1;
+  const eyeColor = t.chasing ? 0xff1744 : 0x5a3a3a;
+  ud.eyeL.material.emissiveIntensity = t.chasing?1.2:0.3;
+  ud.eyeR.material.emissiveIntensity = t.chasing?1.2:0.3;
+  ud.eyeL.material.emissive.setHex(eyeColor);
+  ud.eyeR.material.emissive.setHex(eyeColor);
+
+  const roomHere = getRoomAt(state.player.x,state.player.z);
+  document.getElementById('roomLabel').textContent = roomHere ? roomHere.name : "Corridor";
+
+  // toggle ceilings: hide ceiling of the room the player is currently in
+  ceilings.forEach(c=>{ c.mesh.visible = (c.room !== roomHere); });
+}
+
+function caughtGame(){ state.gameOver=true; showMsg("😱 Teacher ne pakad liya!<br>Final Score: "+state.score); }
+function winGame(){ state.gameOver=true; showMsg("🎉 Sab pranks safal!<br>Final Score: "+state.score); }
+function showMsg(html){ document.getElementById('msgText').innerHTML=html; document.getElementById('msg').style.display='block'; }
+function restartGame(){ resetState(); }
+function updateHUD(){
+  document.getElementById('scoreBox').textContent="Score: "+state.score;
+  document.getElementById('pranksBox').textContent="Pranks: "+state.prankCount+"/"+state.totalPranks;
+  document.getElementById('hideBox').textContent="🫥 Hidden: "+(state.hidden?"Yes":"No");
+}
+
+// ---------- CAMERA ----------
+const camTarget = new THREE.Vector3();
+const lookTarget = new THREE.Vector3();
+function updateCamera(){
+  const p = state.player;
+  if(state.cameraMode===0){ // Follow (third person)
+    camTarget.set(p.x, 8.5, p.z+9);
+    lookTarget.set(p.x, 1.2, p.z);
+  } else if(state.cameraMode===1){ // Top-down
+    camTarget.set(p.x, 24, p.z+0.5);
+    lookTarget.set(p.x, 0, p.z);
+  } else { // Cinematic
+    camTarget.set(p.x+4, 13, p.z+13);
+    lookTarget.set(p.x, 1.5, p.z);
+  }
+  camera.position.lerp(camTarget, 0.07);
+  camera.lookAt(lookTarget);
+}
+
+// ---------- PRANK ANIM ----------
+function animatePranks(){
+  const t = performance.now()*0.002;
+  allPranks.forEach(p=>{
+    if(p.done) return;
+    p.mesh.rotation.y += 0.02;
+    p.mesh.position.y = 1.1 + Math.sin(t+p.x)*0.15;
+  });
+}
+
+// ---------- LOOP ----------
+function loop(){
+  updatePlayer();
+  updateTeacher();
+  updateCamera();
+  animatePranks();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
