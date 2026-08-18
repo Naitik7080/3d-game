@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Coin Collector</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; overflow:hidden; background:#000; font-family:Arial,sans-serif; }
+  #hud {
+    position:fixed; top:15px; left:15px; z-index:10;
+    color:white; background:rgba(0,0,0,.55); padding:12px 16px;
+    border-radius:12px; font-size:18px; line-height:1.5;
+    user-select:none;
+  }
+  #message {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    z-index:20; pointer-events:none;
+  }
+  #messageBox {
+    display:none; color:white; text-align:center;
+    background:rgba(0,0,0,.75); padding:28px 40px; border-radius:18px;
+  }
+  #messageBox h1 { margin:0 0 10px; }
+  #messageBox p { margin:6px 0; }
+  #controls {
+    position:fixed; bottom:15px; left:50%; transform:translateX(-50%);
+    color:white; background:rgba(0,0,0,.5); padding:9px 14px;
+    border-radius:10px; z-index:10; font-size:14px;
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  🪙 Score: <span id="score">0</span>/10<br>
+  ❤️ Lives: <span id="lives">3</span>
+</div>
+<div id="controls">WASD / Arrow Keys = Move &nbsp; | &nbsp; R = Restart</div>
+<div id="message"><div id="messageBox">
+  <h1 id="result"></h1>
+  <p id="resultText"></p>
+  <p>Press <b>R</b> to play again</p>
+</div></div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 25, 70);
+
+const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x557755, 2));
+const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+sun.position.set(10,20,10);
+sun.castShadow = true;
+scene.add(sun);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(70,70),
+  new THREE.MeshStandardMaterial({color:0x4f9b4f})
+);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Border
+const borderMat = new THREE.MeshStandardMaterial({color:0x333333});
+for (const [x,z,sx,sz] of [
+  [0,-34,70,1],[0,34,70,1],[-34,0,1,70],[34,0,1,70]
+]) {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(sx,2,sz), borderMat);
+  b.position.set(x,1,z); b.castShadow=true; scene.add(b);
+}
+
+// Player
+const player = new THREE.Group();
+const body = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2,1.5,0.9),
+  new THREE.MeshStandardMaterial({color:0x3366ff})
+);
+body.position.y = 1.05; body.castShadow=true; player.add(body);
+
+const head = new THREE.Mesh(
+  new THREE.SphereGeometry(0.48,24,16),
+  new THREE.MeshStandardMaterial({color:0xffcc99})
+);
+head.position.y=2.1; head.castShadow=true; player.add(head);
+
+player.position.set(0,0,20);
+scene.add(player);
+
+// Obstacles
+const obstacles = [];
+const obstacleMat = new THREE.MeshStandardMaterial({color:0x8b4513});
+const obstaclePositions = [
+  [-10,10,4,3],[8,6,5,3],[-14,-3,3,5],[12,-8,4,4],
+  [-4,-15,6,3],[5,-22,3,5],[-17,-20,4,4]
+];
+
+for (const [x,z,w,d] of obstaclePositions) {
+  const o = new THREE.Mesh(new THREE.BoxGeometry(w,2.5,d), obstacleMat);
+  o.position.set(x,1.25,z);
+  o.castShadow=true; o.receiveShadow=true;
+  scene.add(o);
+  obstacles.push({mesh:o, box:new THREE.Box3()});
+}
+
+// Coins
+const coins=[];
+const coinPositions=[
+  [-7,15],[5,13],[-14,8],[14,10],[-3,5],
+  [-10,-7],[3,-7],[16,-15],[-13,-25],[12,-25]
+];
+
+for (const [x,z] of coinPositions) {
+  const coin = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55,0.55,0.16,32),
+    new THREE.MeshStandardMaterial({color:0xffd700, metalness:.7, roughness:.2})
+  );
+  coin.rotation.x=Math.PI/2;
+  coin.position.set(x,0.8,z);
+  coin.castShadow=true;
+  scene.add(coin);
+  coins.push(coin);
+}
+
+// Input
+const keys={};
+addEventListener("keydown",e=>{
+  keys[e.key.toLowerCase()]=true;
+  if(e.key.toLowerCase()==="r") location.reload();
+});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+let score=0, lives=3, gameOver=false;
+const speed=0.13;
+const playerBox=new THREE.Box3();
+
+function updateHUD(){
+  document.getElementById("score").textContent=score;
+  document.getElementById("lives").textContent=lives;
+}
+function endGame(win){
+  gameOver=true;
+  const box=document.getElementById("messageBox");
+  box.style.display="block";
+  document.getElementById("result").textContent=win?"🎉 YOU WIN!":"💀 GAME OVER";
+  document.getElementById("resultText").textContent=
+    win?"You collected all 10 coins!":"You ran out of lives.";
+}
+
+function resetPlayer(){
+  player.position.set(0,0,20);
+}
+
+const clock=new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+
+  if(!gameOver){
+    let dx=0,dz=0;
+    if(keys["w"]||keys["arrowup"]) dz-=1;
+    if(keys["s"]||keys["arrowdown"]) dz+=1;
+    if(keys["a"]||keys["arrowleft"]) dx-=1;
+    if(keys["d"]||keys["arrowright"]) dx+=1;
+
+    if(dx||dz){
+      const len=Math.hypot(dx,dz);
+      dx/=len; dz/=len;
+      const oldX=player.position.x, oldZ=player.position.z;
+      player.position.x += dx*speed;
+      player.position.z += dz*speed;
+      player.rotation.y=Math.atan2(dx,dz);
+
+      playerBox.setFromObject(player);
+      let hit=false;
+      for(const o of obstacles){
+        o.box.setFromObject(o.mesh);
+        if(playerBox.intersectsBox(o.box)){ hit=true; break; }
+      }
+      if(hit){
+        player.position.x=oldX;
+        player.position.z=oldZ;
+      }
+    }
+
+    // Collect coins
+    for(let i=coins.length-1;i>=0;i--){
+      const c=coins[i];
+      c.rotation.z += 0.05;
+      c.position.y=0.8+Math.sin(performance.now()*0.004+i)*0.12;
+      if(player.position.distanceTo(c.position)<1.2){
+        scene.remove(c);
+        coins.splice(i,1);
+        score++;
+        updateHUD();
+        if(score===10) endGame(true);
+      }
+    }
+
+    // Simple camera follow
+    const targetCam=new THREE.Vector3(player.position.x,9,player.position.z+11);
+    camera.position.lerp(targetCam,0.08);
+    camera.lookAt(player.position.x,0.8,player.position.z);
+
+    // Keep player in arena
+    player.position.x=THREE.MathUtils.clamp(player.position.x,-31,31);
+    player.position.z=THREE.MathUtils.clamp(player.position.z,-31,31);
+  }
+
+  renderer.render(scene,camera);
+}
+
+addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+updateHUD();
+camera.position.set(0,9,31);
+camera.lookAt(0,1,20);
+animate();
+</script>
+</body>
+</html>
