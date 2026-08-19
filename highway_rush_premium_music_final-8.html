@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>HIGHWAY RUSH X — Ultimate Edition</title>
+<style>
+:root{--gold:#ffd21a;--cyan:#16dfff;--panel:#08121ee8;--line:#ffffff1c}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03070c;color:#fff;font-family:Inter,system-ui,Arial,sans-serif;touch-action:none}
+#game{position:fixed;inset:0}canvas{display:block}
+.hidden{display:none!important}
+.overlay{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:16px;background:radial-gradient(circle at 50% 25%,#1b416044,#02060de8 72%);backdrop-filter:blur(7px)}
+.panel{width:min(94vw,560px);max-height:92vh;overflow:auto;padding:28px;border-radius:28px;background:linear-gradient(145deg,#102033f5,#050b13f5);border:1px solid var(--line);box-shadow:0 30px 100px #000c;text-align:center}
+.brand{font-size:clamp(38px,10vw,68px);font-weight:950;letter-spacing:3px;line-height:.95}.brand span{color:var(--gold)}
+.tag{margin:12px 0 25px;color:#9eb0c5;letter-spacing:2px;font-size:11px;text-transform:uppercase}
+button{font:inherit;font-weight:800;border:0;border-radius:14px;padding:12px 18px;margin:4px;cursor:pointer}
+.primary{color:#151006;background:linear-gradient(135deg,#ffe14a,#ff9d00);box-shadow:0 8px 24px #ffb00030}
+.secondary{color:#fff;background:#172638;border:1px solid #ffffff14}.danger{color:#fff;background:#942936}
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:9px}.menu .primary{grid-column:1/-1}
+.features{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:18px 0}.feature{padding:10px 4px;background:#ffffff08;border:1px solid #ffffff0e;border-radius:13px;font-size:20px}.feature b{display:block;font-size:11px;margin-top:4px}.feature small{font-size:9px;color:#8192a7}
+#hud{position:fixed;z-index:12;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.stats{display:flex;gap:6px;flex-wrap:wrap}.stat{min-width:72px;padding:7px 10px;border-radius:12px;background:#06101bdc;border:1px solid #ffffff16;box-shadow:0 8px 25px #0005}.label{font-size:8px;color:#8fa2b8;letter-spacing:1px;text-transform:uppercase}.value{font-size:15px;font-weight:900}
+#pauseBtn{pointer-events:auto;background:#06101bdc;color:#fff;padding:9px 13px}
+#controls{position:fixed;z-index:15;left:0;right:0;bottom:max(15px,env(safe-area-inset-bottom));display:flex;justify-content:space-between;padding:0 17px;pointer-events:none}
+.ctrl{pointer-events:auto;width:70px;height:70px;padding:0;border-radius:50%;color:#fff;background:#06111edb;border:1px solid #ffffff30;box-shadow:0 10px 28px #0008;font-size:28px}
+#nitroBtn{width:94px;border-radius:19px;font-size:11px;background:linear-gradient(135deg,#13dfff,#4a61ff);box-shadow:0 8px 30px #159fff35}
+#nitroWrap{position:fixed;z-index:14;left:50%;bottom:101px;transform:translateX(-50%);width:min(280px,62vw);height:16px;padding:3px;border-radius:20px;background:#02070dcc;border:1px solid #ffffff18}
+#nitroBar{width:100%;height:100%;border-radius:20px;background:linear-gradient(90deg,#13e5ff,#5365ff);box-shadow:0 0 15px #13dfff}
+#toast{position:fixed;z-index:60;top:72px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:#02070eec;border:1px solid #ffffff18;opacity:0;transition:.2s;pointer-events:none}
+.tabs{display:flex;gap:6px;margin:15px 0}.tabs button{flex:1}.tabActive{outline:2px solid var(--gold)}
+.list{margin:10px 0;text-align:left}.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px;margin:7px 0;border-radius:14px;background:#ffffff08;border:1px solid #ffffff0d}.item small{color:#8ea0b5}
+.preview{height:150px;border-radius:18px;margin-bottom:13px;background:radial-gradient(circle,#1d4057,#07101a 65%);display:flex;align-items:center;justify-content:center;font-size:76px}
+.bar{height:8px;background:#ffffff12;border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),#6c65ff)}
+#rain{position:fixed;z-index:5;inset:0;pointer-events:none;opacity:0;background:repeating-linear-gradient(105deg,transparent 0 13px,#bceeff35 14px,#bceeff35 15px,transparent 16px 30px);animation:rain .32s linear infinite}
+@keyframes rain{to{background-position:90px 120px}}
+#flash{position:fixed;z-index:25;inset:0;background:#fff;opacity:0;pointer-events:none}
+@media(max-width:600px){.features{grid-template-columns:repeat(2,1fr)}.panel{padding:22px}.stat{min-width:62px}.value{font-size:13px}}
+</style>
+</head>
+<body>
+<div id="game"></div><div id="rain"></div><div id="flash"></div>
+<div id="toast"></div>
+
+<div id="hud" class="hidden">
+ <div class="stats">
+  <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+  <div class="stat"><div class="label">Distance</div><div class="value"><span id="distance">0</span>m</div></div>
+  <div class="stat"><div class="label">Speed</div><div class="value"><span id="speed">0</span></div></div>
+  <div class="stat"><div class="label">Coins</div><div class="value">🪙 <span id="coinsHud">0</span></div></div>
+ </div>
+ <button id="pauseBtn">Ⅱ</button>
+</div>
+<div id="nitroWrap" class="hidden"><div id="nitroBar"></div></div>
+<div id="controls" class="hidden">
+ <button class="ctrl" id="left">◀</button><button class="ctrl" id="nitroBtn">NITRO</button><button class="ctrl" id="right">▶</button>
+</div>
+
+<section class="overlay" id="menu"><div class="panel">
+ <div class="brand">HIGHWAY <span>RUSH X</span></div>
+ <div class="tag">Ultimate browser racing edition</div>
+ <div class="features">
+  <div class="feature">🚗<b>GARAGE</b><small>4 cars</small></div>
+  <div class="feature">🚘<b>TRAFFIC</b><small>AI traffic</small></div>
+  <div class="feature">🌦️<b>WORLD</b><small>4 moods</small></div>
+  <div class="feature">⚡<b>NITRO</b><small>boost</small></div>
+ </div>
+ <div class="menu">
+  <button class="primary" id="startBtn">START RACE</button>
+  <button class="secondary" id="garageBtn">GARAGE</button>
+  <button class="secondary" id="worldBtn">WORLD</button>
+  <button class="secondary" id="upgradeBtn">UPGRADES</button>
+  <button class="secondary" id="settingsBtn">SETTINGS</button>
+ </div>
+ <p style="font-size:11px;color:#71849a;margin-top:20px">A/D or ←/→ steer · Space = nitro · Mobile buttons supported</p>
+</div></section>
+
+<section class="overlay hidden" id="garage"><div class="panel">
+ <h2>🚗 GARAGE</h2><div class="preview" id="preview">🏎️</div><div>Coins: 🪙 <b id="garageCoins">0</b></div>
+ <div class="list" id="carList"></div><button class="secondary" id="garageBack">BACK</button>
+</div></section>
+
+<section class="overlay hidden" id="world"><div class="panel">
+ <h2>🌍 WORLD</h2><p>Choose your atmosphere.</p>
+ <button class="secondary worldBtn" data-w="day">☀️ DAY</button><button class="secondary worldBtn" data-w="sunset">🌇 SUNSET</button>
+ <button class="secondary worldBtn" data-w="night">🌙 NIGHT</button><button class="secondary worldBtn" data-w="rain">🌧️ RAIN</button>
+ <br><button class="secondary" id="worldBack">BACK</button>
+</div></section>
+
+<section class="overlay hidden" id="upgrades"><div class="panel">
+ <h2>🔧 PERFORMANCE</h2><p>Coins: 🪙 <b id="upgradeCoins">0</b></p>
+ <div class="item"><div><b>Engine</b><br><small>Level <span id="engineLvl">0</span> · +4 top speed</small></div><button class="primary" id="engineBuy">200</button></div>
+ <div class="item"><div><b>Handling</b><br><small>Level <span id="handlingLvl">0</span> · easier steering</small></div><button class="primary" id="handlingBuy">200</button></div>
+ <div class="item"><div><b>Nitro</b><br><small>Level <span id="nitroLvl">0</span> · stronger boost</small></div><button class="primary" id="nitroBuy">250</button></div>
+ <button class="secondary" id="upgradeBack">BACK</button>
+</div></section>
+
+<section class="overlay hidden" id="settings"><div class="panel">
+ <h2>⚙ SETTINGS</h2><p>Graphics quality</p>
+ <button class="secondary quality" data-q="low">LOW</button><button class="secondary quality" data-q="medium">MEDIUM</button><button class="secondary quality" data-q="high">HIGH</button>
+ <p style="color:#8496aa;font-size:12px">The renderer automatically limits pixel ratio for mobile performance.</p>
+ <button class="secondary" id="musicToggle">🎵 MUSIC</button>
+ <button class="secondary" id="sfxToggle">🔊 SFX</button>
+ <button class="secondary" id="settingsBack">BACK</button>
+</div></section>
+
+<section class="overlay hidden" id="pause"><div class="panel"><h2>PAUSED</h2><button class="primary" id="resume">RESUME</button><button class="secondary" id="quit">QUIT RACE</button></div></section>
+
+<section class="overlay hidden" id="over"><div class="panel">
+ <h2>💥 RACE OVER</h2><div class="features">
+  <div class="feature">🏆<b id="finalScore">0</b><small>SCORE</small></div>
+  <div class="feature">🛣️<b id="finalDistance">0m</b><small>DISTANCE</small></div>
+  <div class="feature">🪙<b id="earned">0</b><small>EARNED</small></div>
+  <div class="feature">🏁<b id="best">0</b><small>BEST</small></div>
+ </div>
+ <button class="primary" id="again">RACE AGAIN</button><button class="secondary" id="home">MAIN MENU</button>
+</div></section>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+(()=>{"use strict";
+const $=id=>document.getElementById(id),show=id=>$(id).classList.remove("hidden"),hide=id=>$(id).classList.add("hidden");
+let scene,camera,renderer,player,traffic=[],marks=[],trees=[];
+let running=false,paused=false,steer=0,nitro=false,last=0,score=0,distance=0,speed=34,fuel=100;
+let coins=+localStorage.hr_coins||0,selected=+localStorage.hr_car||0,weather=localStorage.hr_world||"day",quality=localStorage.hr_quality||"high";
+let levels={engine:+localStorage.hr_engine||0,handling:+localStorage.hr_handling||0,nitro:+localStorage.hr_nitro||0};
+let audio=null,osc=null,gain=null,best=+localStorage.hr_best||0;
+const cars=[
+ {name:"Street Sport",color:0xe32736,price:0,top:65,emoji:"🏎️"},
+ {name:"GT Blue",color:0x1976d2,price:350,top:72,emoji:"🚘"},
+ {name:"Super Gold",color:0xffae00,price:800,top:82,emoji:"🏎️"},
+ {name:"Hyper Black",color:0x30343a,price:1400,top:94,emoji:"🏎️"}
+];
+
+function init(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x87ceeb);scene.fog=new THREE.Fog(0x87ceeb,45,190);
+ camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,350);camera.position.set(0,4.3,9);
+ renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+ renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(1);renderer.shadowMap.enabled=true;
+ $("game").appendChild(renderer.domElement);applyQuality();
+ scene.add(new THREE.HemisphereLight(0xbfeaff,0x3d6037,2));
+ const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(-30,50,20);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+ const ground=new THREE.Mesh(new THREE.PlaneGeometry(650,650),new THREE.MeshStandardMaterial({color:0x477b3d,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.08;scene.add(ground);
+ const road=new THREE.Mesh(new THREE.PlaneGeometry(13,650),new THREE.MeshStandardMaterial({color:0x292d31,roughness:.95}));road.rotation.x=-Math.PI/2;scene.add(road);
+ [-6.5,6.5].forEach(x=>{const e=new THREE.Mesh(new THREE.BoxGeometry(.18,.04,650),new THREE.MeshStandardMaterial({color:0xffffff}));e.position.set(x,.03,0);scene.add(e)});
+ for(let z=-310;z<100;z+=8)for(const x of[-2,2]){const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.025,3.7),new THREE.MeshStandardMaterial({color:0xffffff}));m.position.set(x,.04,z);scene.add(m);marks.push(m)}
+ for(let z=-300;z<110;z+=14){tree(-9-Math.random()*3,z);tree(9+Math.random()*3,z+6)}
+ player=makeCar(cars[selected].color);player.position.set(0,0,3);scene.add(player);
+ for(let i=0;i<13;i++)spawn(-35-i*22-Math.random()*25);
+ applyWorld(weather);bind();requestAnimationFrame(loop);
+}
+function tree(x,z){const g=new THREE.Group(),t=new THREE.Mesh(new THREE.CylinderGeometry(.18,.24,1.35,8),new THREE.MeshStandardMaterial({color:0x70472b})),c=new THREE.Mesh(new THREE.SphereGeometry(.82,10,8),new THREE.MeshStandardMaterial({color:0x17682c,roughness:1}));t.position.y=.68;c.position.y=1.75;g.add(t,c);g.position.set(x,0,z);scene.add(g);trees.push(g)}
+function makeCar(color,type="car"){
+ const g=new THREE.Group(),body=new THREE.MeshStandardMaterial({color,metalness:.45,roughness:.25}),dark=new THREE.MeshStandardMaterial({color:0x101419,roughness:.2}),glass=new THREE.MeshStandardMaterial({color:0x183246,metalness:.25,roughness:.1});
+ const w=type==="truck"?2.1:1.78,l=type==="truck"?4.5:3.4,b=new THREE.Mesh(new THREE.BoxGeometry(w,type==="truck"?.9:.55,l),body);b.position.y=.57;b.castShadow=true;g.add(b);
+ if(type==="truck"){const cab=new THREE.Mesh(new THREE.BoxGeometry(1.65,1.05,1.25),glass);cab.position.set(0,1.35,1);g.add(cab)}
+ else{const cab=new THREE.Mesh(new THREE.BoxGeometry(1.34,.62,1.55),glass);cab.position.set(0,1.05,.3);g.add(cab);const hood=new THREE.Mesh(new THREE.BoxGeometry(1.55,.25,.75),body);hood.position.set(0,.83,-1.15);g.add(hood)}
+ for(const x of[-1,1])for(const z of[-1,1]){const wmesh=new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,.22,16),dark);wmesh.rotation.z=Math.PI/2;wmesh.position.set(x*w*.54,.36,z*l*.29);g.add(wmesh)}
+ for(const x of[-.53,.53]){const lamp=new THREE.Mesh(new THREE.BoxGeometry(.32,.11,.05),new THREE.MeshStandardMaterial({color:0xffffd0,emissive:0xffff9c,emissiveIntensity:1.5}));lamp.position.set(x,.72,-l/2-.03);g.add(lamp)}
+ return g;
+}
+function spawn(z){const lane=[-4,-2,0,2,4][Math.random()*5|0],type=Math.random()<.13?"truck":"car",colors=[0x1976d2,0xffae00,0xf1f1f1,0x7020a0,0x168844,0x222222,0xd64725],c=makeCar(colors[Math.random()*colors.length|0],type);c.scale.setScalar(type==="truck"?1:.88);c.position.set(lane,0,z);scene.add(c);traffic.push(c)}
+function applyQuality(){renderer.setPixelRatio(quality==="low"?1:quality==="medium"?Math.min(devicePixelRatio,1.25):Math.min(devicePixelRatio,1.6))}
+function applyWorld(w){weather=w;localStorage.hr_world=w;const cfg={day:[0x87ceeb,2.4],sunset:[0xd78368,1.65],night:[0x071426,.7],rain:[0x667786,1.05]}[w];scene.background.setHex(cfg[0]);scene.fog.color.setHex(cfg[0]);scene.children.forEach(o=>{if(o.isDirectionalLight)o.intensity=cfg[1]});$("rain").style.opacity=w==="rain"?".8":"0"}
+function setupAudio(){
+ if(audio)return;
+ try{
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+  audio=new AC();
+  osc=audio.createOscillator();gain=audio.createGain();
+  osc.type="sawtooth";gain.gain.value=.007;osc.connect(gain).connect(audio.destination);osc.start();
+  musicGain=audio.createGain();musicGain.gain.value=musicOn?.035:0;musicGain.connect(audio.destination);
+  startMusic();
+ }catch(e){}
+}
+function musicNote(freq,dur,when,type="triangle",vol=.035){
+ if(!audio||!musicOn)return;
+ const o=audio.createOscillator(),g=audio.createGain();
+ o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.0001,when);
+ g.gain.exponentialRampToValueAtTime(vol,when+.025);
+ g.gain.exponentialRampToValueAtTime(.0001,when+dur);
+ o.connect(g).connect(musicGain);o.start(when);o.stop(when+dur+.03);
+}
+function startMusic(){
+ if(!audio||musicTimer)return;
+ musicTimer=setInterval(()=>{
+  if(!audio||!musicOn)return;
+  const now=audio.currentTime+.02, i=musicStep%melody.length;
+  musicNote(melody[i],.22,now,"triangle",.028);
+  musicNote(bass[i],.38,now,"sine",.022);
+  if(i%2===0)musicNote(melody[(i+2)%melody.length]*2,.12,now+.19,"square",.012);
+  musicStep++;
+ },300);
+}
+function setMusic(on){
+ musicOn=on;localStorage.hr_music=on?"1":"0";
+ if(musicGain)musicGain.gain.setTargetAtTime(on?.035:0,audio.currentTime,.04);
+ updateAudioButtons();
+}
+function setSfx(on){sfxOn=on;localStorage.hr_sfx=on?"1":"0";updateAudioButtons()}
+function beep(f,d=.1){
+ if(!audio||!sfxOn)return;
+ const o=audio.createOscillator(),g=audio.createGain();
+ o.frequency.value=f;g.gain.setValueAtTime(.045,audio.currentTime);
+ g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+d);
+ o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+d);
+}
+function toast(t){$("toast").textContent=t;$("toast").style.opacity=1;clearTimeout(window.tt);window.tt=setTimeout(()=>$("toast").style.opacity=0,1200)}
+function start(){setupAudio();if(audio&&audio.state==="suspended")audio.resume();updateAudioButtons();running=true;paused=false;score=0;distance=0;speed=34;fuel=100;steer=0;nitro=false;player.position.set(0,0,3);player.rotation.set(0,0,0);["menu","over","pause"].forEach(hide);["hud","controls","nitroWrap"].forEach(show);$("coinsHud").textContent=coins}
+function crash(){if(!running)return;running=false;beep(70,.35);const earned=Math.floor(distance/80);coins+=earned;best=Math.max(best,Math.floor(score));localStorage.hr_coins=coins;localStorage.hr_best=best;$("finalScore").textContent=Math.floor(score);$("finalDistance").textContent=Math.floor(distance)+"m";$("earned").textContent=earned;$("best").textContent=best;["hud","controls","nitroWrap"].forEach(hide);show("over");$("flash").style.opacity=.65;setTimeout(()=>$("flash").style.opacity=0,100)}
+function update(dt){
+ const d=cars[selected],max=d.top+levels.engine*4;let actual=speed;
+ if(nitro&&fuel>0){actual+=34+levels.nitro*6;fuel-=42*dt}else fuel=Math.min(100,fuel+8+levels.nitro*2*dt);
+ speed=Math.min(max,speed+dt*(1.1+levels.engine*.12));
+ player.position.x+=steer*(7+levels.handling*1.1)*dt;player.position.x=Math.max(-4.8,Math.min(4.8,player.position.x));player.rotation.z=THREE.MathUtils.lerp(player.rotation.z,-steer*.065,.12);
+ const dz=actual*dt;marks.forEach(m=>{m.position.z+=dz;if(m.position.z>18)m.position.z-=410});trees.forEach(t=>{t.position.z+=dz;if(t.position.z>20)t.position.z-=410});
+ traffic.forEach(c=>{c.position.z+=dz*.68;if(c.position.z>20){c.position.z=-250-Math.random()*120;c.position.x=[-4,-2,0,2,4][Math.random()*5|0];score+=15}if(Math.abs(c.position.x-player.position.x)<1.3&&Math.abs(c.position.z-player.position.z)<2.05)crash()});
+ distance+=actual*dt;score+=actual*dt*.45;$("score").textContent=Math.floor(score);$("distance").textContent=Math.floor(distance);$("speed").textContent=Math.floor(actual*3.2);$("coinsHud").textContent=coins;$("nitroBar").style.width=Math.max(0,fuel)+"%";
+ if(osc&&audio)try{osc.frequency.setTargetAtTime(70+actual*2.4,audio.currentTime,.04)}catch(e){}
+ camera.position.x=THREE.MathUtils.lerp(camera.position.x,player.position.x*.3,.08);camera.lookAt(player.position.x*.3,.75,-9)
+}
+function loop(now){requestAnimationFrame(loop);if(!last)last=now;const dt=Math.min((now-last)/1000,.04);last=now;if(running&&!paused)update(dt);renderer.render(scene,camera)}
+function selectCar(i){selected=i;localStorage.hr_car=i;scene.remove(player);player=makeCar(cars[i].color);player.position.set(0,0,3);scene.add(player)}
+function garageUI(){hide("menu");show("garage");$("garageCoins").textContent=coins;const box=$("carList");box.innerHTML="";cars.forEach((c,i)=>{const owned=i===0||localStorage["hr_owned_"+i]==="1",row=document.createElement("div");row.className="item";row.innerHTML="<div><b>"+c.emoji+" "+c.name+"</b><br><small>Top speed "+(c.top+levels.engine*4)+" km/h</small></div><button class='"+(i===selected?"primary":"secondary")+"'>"+(i===selected?"SELECTED":owned?"SELECT":"🪙 "+c.price)+"</button>";row.querySelector("button").onclick=()=>{if(owned){selectCar(i);garageUI()}else if(coins>=c.price){coins-=c.price;localStorage.hr_coins=coins;localStorage["hr_owned_"+i]="1";selectCar(i);garageUI()}else toast("Not enough coins")};box.appendChild(row)})}
+function upgradeUI(){hide("menu");show("upgrades");$("upgradeCoins").textContent=coins;$("engineLvl").textContent=levels.engine;$("handlingLvl").textContent=levels.handling;$("nitroLvl").textContent=levels.nitro}
+function buy(type,cost){if(coins<cost){toast("Not enough coins");return}coins-=cost;levels[type]++;localStorage.hr_coins=coins;localStorage["hr_"+type]=levels[type];upgradeUI();toast(type+" upgraded")}
+function updateAudioButtons(){
+ const m=$("musicToggle"),x=$("sfxToggle");
+ if(m)m.textContent=musicOn?"🎵 MUSIC: ON":"🎵 MUSIC: OFF";
+ if(x)x.textContent=sfxOn?"🔊 SFX: ON":"🔇 SFX: OFF";
+}
+function bind(){
+ $("startBtn").onclick=start;$("again").onclick=start;$("home").onclick=()=>{hide("over");show("menu")};
+ $("garageBtn").onclick=garageUI;$("garageBack").onclick=()=>{hide("garage");show("menu")};
+ $("worldBtn").onclick=()=>{hide("menu");show("world")};$("worldBack").onclick=()=>{hide("world");show("menu")};
+ document.querySelectorAll(".worldBtn").forEach(b=>b.onclick=()=>{applyWorld(b.dataset.w);toast("World changed")});
+ $("upgradeBtn").onclick=upgradeUI;$("upgradeBack").onclick=()=>{hide("upgrades");show("menu")};
+ $("engineBuy").onclick=()=>buy("engine",200);$("handlingBuy").onclick=()=>buy("handling",200);$("nitroBuy").onclick=()=>buy("nitro",250);
+ $("settingsBtn").onclick=()=>{hide("menu");show("settings");updateAudioButtons()};
+ $("settingsBack").onclick=()=>{hide("settings");show("menu")};
+ $("musicToggle").onclick=()=>{setupAudio();if(audio&&audio.state==="suspended")audio.resume();setMusic(!musicOn)};
+ $("sfxToggle").onclick=()=>{setupAudio();if(audio&&audio.state==="suspended")audio.resume();setSfx(!sfxOn)};
+ document.querySelectorAll(".quality").forEach(b=>b.onclick=()=>{quality=b.dataset.q;localStorage.hr_quality=quality;applyQuality();toast("Graphics: "+quality)});
+ $("pauseBtn").onclick=()=>{if(running){paused=true;show("pause")}};$("resume").onclick=()=>{paused=false;hide("pause")};
+ $("quit").onclick=()=>{running=false;paused=false;["pause","hud","controls","nitroWrap"].forEach(hide);show("menu")};
+ const hold=(el,v)=>{el.onpointerdown=e=>{e.preventDefault();steer=v};["pointerup","pointercancel","pointerleave"].forEach(x=>el.addEventListener(x,()=>steer=0))};
+ hold($("left"),-1);hold($("right"),1);
+ $("nitroBtn").onpointerdown=()=>nitro=true;["pointerup","pointercancel","pointerleave"].forEach(x=>$("nitroBtn").addEventListener(x,()=>nitro=false));
+ addEventListener("keydown",e=>{if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")steer=-1;if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")steer=1;if(e.code==="Space")nitro=true});
+ addEventListener("keyup",e=>{if(["ArrowLeft","ArrowRight","a","d"].includes(e.key))steer=0;if(e.code==="Space")nitro=false});
+ addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);applyQuality()})
+}
+init();updateAudioButtons()
+})();
+</script>
+</body>
+</html>
